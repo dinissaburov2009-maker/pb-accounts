@@ -5,4 +5,4 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "pb-accounts"
-database_id = "ВСТАВЬТЕ_СЮДА_ID_БАЗЫ"
+database_id = "41eddac2-9f37-4b6d-a872-636d13ed5424"
