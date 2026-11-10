@@ -42,7 +42,8 @@ function checkProfile(p) {
   if (!p || typeof p !== 'object' || Array.isArray(p) || badShape(p, 0)) return null;
   const text = JSON.stringify(p);
   if (text.length > MAX_BYTES) return null;
-  return { text, nick: String(p.nickname || '').slice(0, 24) };
+  const mm = (v) => { v = Math.round(Number(v)); return Number.isFinite(v) ? Math.min(100000, Math.max(0, v)) : 0; };
+  return { text, nick: String(p.nickname || '').slice(0, 24), m1: mm(p.mmr1v1), m2: mm(p.mmr2v2) };
 }
 async function body(req) {
   try { const t = await req.text(); if (t.length > MAX_BYTES + 5000) return null; const o = JSON.parse(t); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
@@ -77,8 +78,8 @@ async function register(req, env) {
   for (let i = 0; i < 5; i++) {
     id = rand(8);
     try {
-      await env.DB.prepare('INSERT INTO accounts (id, recovery_hash, profile, rev, nick, created, updated) VALUES (?, ?, ?, 1, ?, ?, ?)')
-        .bind(id, recHash, p.text, p.nick, now, now).run();
+      await env.DB.prepare('INSERT INTO accounts (id, recovery_hash, profile, rev, nick, m1, m2, created, updated) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)')
+        .bind(id, recHash, p.text, p.nick, p.m1, p.m2, now, now).run();
       break;
     } catch (e) { id = ''; }
   }
@@ -101,11 +102,20 @@ async function getProfile(env, a, url) {
 async function putProfile(req, env, a) {
   const b = await body(req), p = b && checkProfile(b.profile);
   if (!p || !Number.isInteger(b.baseRev)) return fail(400, 'bad_profile');
-  const r = await env.DB.prepare('UPDATE accounts SET profile = ?, rev = rev + 1, nick = ?, updated = ? WHERE id = ? AND rev = ?')
-    .bind(p.text, p.nick, Date.now(), a.acc, b.baseRev).run();
+  const r = await env.DB.prepare('UPDATE accounts SET profile = ?, rev = rev + 1, nick = ?, m1 = ?, m2 = ?, updated = ? WHERE id = ? AND rev = ?')
+    .bind(p.text, p.nick, p.m1, p.m2, Date.now(), a.acc, b.baseRev).run();
   const row = await env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(a.acc).first();
   if (!r.meta || r.meta.changes !== 1) return json({ error: 'conflict', rev: row ? row.rev : 0 }, 409);
   return json({ rev: row.rev });
+}
+// Общий топ живых игроков: ник и MMR (1v1 или 2v2). Только для вошедших; аккаунты без ника и неактивные 30 дней не показываются
+const TOP_FRESH_MS = 30 * 86400000;
+async function top(env, url) {
+  const col = url.searchParams.get('mode') === '2v2' ? 'm2' : 'm1';
+  const lim = Math.min(100, Math.max(5, parseInt(url.searchParams.get('limit'), 10) || 50));
+  const rs = await env.DB.prepare('SELECT id, nick, ' + col + ' AS m FROM accounts WHERE ' + col + " > 0 AND nick != '' AND updated > ? ORDER BY " + col + ' DESC LIMIT ?')
+    .bind(Date.now() - TOP_FRESH_MS, lim).all();
+  return json({ rows: (rs.results || []).map((x) => ({ i: x.id, n: x.nick, m: x.m })) });
 }
 async function rotate(env, a) {
   const recovery = rand(16);
@@ -130,6 +140,7 @@ export default {
         if (!a) return fail(401, 'unauthorized');
         if (path === '/api/profile' && m === 'GET') return await getProfile(env, a, url);
         if (path === '/api/profile' && m === 'PUT') return await putProfile(req, env, a);
+        if (path === '/api/top' && m === 'GET') return await top(env, url);
         if (path === '/api/recovery/rotate' && m === 'POST') return await rotate(env, a);
         if (path === '/api/logout' && m === 'POST') return await logout(env, a);
       }
