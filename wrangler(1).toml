@@ -1,0 +1,8 @@
+name = "pb-accounts"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pb-accounts"
+database_id = "ВСТАВЬТЕ_СЮДА_ID_БАЗЫ"

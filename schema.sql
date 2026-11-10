@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,
+  recovery_hash TEXT NOT NULL UNIQUE,
+  profile TEXT NOT NULL,
+  rev INTEGER NOT NULL DEFAULT 1,
+  nick TEXT NOT NULL DEFAULT '',
+  created INTEGER NOT NULL,
+  updated INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  hash TEXT PRIMARY KEY,
+  acc TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  last INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_acc ON sessions(acc);
